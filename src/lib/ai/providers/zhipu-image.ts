@@ -86,15 +86,17 @@ export class ZhipuImageProvider implements AIProvider {
   }
 
   private mapSize(aspectRatio: string): string {
-    // Map aspect ratio to size
-    // CogView supports: 720x720, 1024x1024, 1280x720, 720x1280, 1920x1080, 1080x1920
+    // 智谱 CogView API 要求：
+    // 1. 长宽在 512-2880px 之间
+    // 2. 必须是 16 的整数倍
+    // 3. 最大像素数不超过 2^21 (约 2,097,152)
     const sizeMap: Record<string, string> = {
-      "1:1": "1024x1024",
-      "16:9": "1920x1080",
-      "9:16": "1080x1920",
-      "4:3": "1280x960",
-      "3:4": "960x1280",
-      "16:10": "1920x1200",
+      "1:1": "1024x1024",    // 1,048,576 px
+      "16:9": "1920x1088",   // 2,088,960 px (1088 = 68*16)
+      "9:16": "1088x1920",   // 2,088,960 px
+      "4:3": "1280x960",     // 1,228,800 px (960 = 60*16)
+      "3:4": "960x1280",     // 1,228,800 px
+      "16:10": "1920x1200",  // 2,304,000 px (1200 = 75*16)
     };
     return sizeMap[aspectRatio] || "1024x1024";
   }
