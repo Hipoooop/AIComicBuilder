@@ -6,7 +6,7 @@ import ZhipuAI from "zhipuai-sdk-nodejs-v4";
 
 interface ZhipuImageResponse {
   created: number;
-  data: Array<string>;
+  data: Array<{ url: string } | string>;
 }
 
 interface ZhipuErrorResponse {
@@ -66,7 +66,10 @@ export class ZhipuImageProvider implements AIProvider {
         throw new Error("Zhipu image: no images in response");
       }
 
-      const imageUrl = res.data[0];
+      // data can be string[] or { url: string }[]
+      // SDK types say string[], but API actually returns { url: string }[]
+      const firstItem = (res.data as Array<{ url: string } | string>)[0];
+      const imageUrl = typeof firstItem === "string" ? firstItem : firstItem.url;
       console.log(`[Zhipu Image] Got URL: ${imageUrl}`);
 
       // Download to local storage
