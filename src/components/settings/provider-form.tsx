@@ -18,7 +18,7 @@ const DEFAULT_BASE_URLS: Record<Protocol, string> = {
   gemini: "https://generativelanguage.googleapis.com",
   seedance: "https://ark.cn-beijing.volces.com",
   "ucloud-seedance": "https://api.modelverse.cn",
-  kling: "https://api.klingai.com",
+  kling: "https://api-beijing.klingai.com",
   wan: "https://dashscope.aliyuncs.com/api/v1",
   zhipu: "https://open.bigmodel.cn/api/paas/v4",
 };

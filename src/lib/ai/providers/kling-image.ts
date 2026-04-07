@@ -48,7 +48,7 @@ export class KlingImageProvider implements AIProvider {
   }) {
     this.apiKey = params?.apiKey || process.env.KLING_ACCESS_KEY || "";
     this.secretKey = params?.secretKey || process.env.KLING_SECRET_KEY || "";
-    this.baseUrl = (params?.baseUrl || "https://api.klingai.com").replace(/\/+$/, "");
+    this.baseUrl = (params?.baseUrl || "https://api-beijing.klingai.com").replace(/\/+$/, "");
     this.model = params?.model || "kling-v1";
     this.uploadDir = params?.uploadDir || process.env.UPLOAD_DIR || "./uploads";
   }
