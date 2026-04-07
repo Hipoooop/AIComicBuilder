@@ -13,8 +13,8 @@ interface ModelItem {
 
 function buildModelsUrl(baseUrl: string): string {
   let url = baseUrl.replace(/\/+$/, "");
-  // If baseUrl already ends with /v1, don't duplicate
-  if (url.endsWith("/v1")) {
+  // If baseUrl already ends with /v1, /v4, etc., don't add /v1
+  if (/\/v\d+$/.test(url)) {
     return url + "/models";
   }
   return url + "/v1/models";
@@ -101,6 +101,21 @@ export async function POST(request: Request) {
           { id: "wan2.6-i2v", name: "Wan 2.6 图生视频" },
           { id: "wan2.6-r2v", name: "Wan 2.6 参考生视频" },
           { id: "wan2.6-r2v-flash", name: "Wan 2.6 参考生视频 Flash" },
+        ],
+      });
+    }
+
+    if (body.protocol === "zhipu") {
+      return NextResponse.json({
+        models: [
+          // Image models (CogView)
+          { id: "cogview-3-flash", name: "CogView-3 Flash (免费)" },
+          { id: "cogview-3-plus", name: "CogView-3 Plus" },
+          { id: "cogview-4", name: "CogView-4 (支持汉字)" },
+          // Video models (CogVideoX)
+          { id: "cogvideox-flash", name: "CogVideoX Flash (免费)" },
+          { id: "cogvideox-2", name: "CogVideoX-2" },
+          { id: "cogvideox-3", name: "CogVideoX-3" },
         ],
       });
     }
