@@ -25,6 +25,14 @@ export function createLanguageModel(config: ProviderConfig): LanguageModel {
       });
       return provider(config.modelId);
     }
+    case "zhipu": {
+      // 智谱 API 与 OpenAI 完全兼容
+      const provider = createOpenAI({
+        apiKey: config.apiKey,
+        baseURL: config.baseUrl,
+      });
+      return provider.chat(config.modelId);
+    }
     default:
       throw new Error(`Unsupported protocol: ${config.protocol}`);
   }
