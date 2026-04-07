@@ -65,6 +65,12 @@ export class KlingImageProvider implements AIProvider {
   }
 
   async generateImage(prompt: string, options?: ImageOptions): Promise<string> {
+    // Kling API 要求 prompt 长度不超过 2500 字符
+    const maxPromptLength = 2400;
+    const truncatedPrompt = prompt.length > maxPromptLength
+      ? prompt.slice(0, maxPromptLength) + "..."
+      : prompt;
+
     // Submit task
     const submitRes = await fetch(`${this.baseUrl}/v1/images/generations`, {
       method: "POST",
@@ -74,7 +80,7 @@ export class KlingImageProvider implements AIProvider {
       },
       body: JSON.stringify({
         model: this.model,
-        prompt,
+        prompt: truncatedPrompt,
         n: 1,
         aspect_ratio: options?.aspectRatio || "16:9",
       }),
