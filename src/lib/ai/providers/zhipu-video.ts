@@ -42,17 +42,21 @@ interface ZhipuResultResponse {
 }
 
 function mapRatioToSize(ratio: string): string {
+  // 智谱 API 要求：
+  // 1. 长宽在 512-2880px 之间
+  // 2. 必须是 16 的整数倍
+  // 3. 最大像素数不超过 2^21 (约 2,097,152)
   const ratioMap: Record<string, string> = {
-    "16:9": "1920x1080",
-    "9:16": "1080x1920",
-    "1:1": "1024x1024",
-    "4:3": "1280x960",
-    "3:4": "960x1280",
-    "16:10": "2048x1080",
-    "2:1": "2048x1080",
-    "4K": "3840x2160",
+    "16:9": "1920x1088",   // 1088 = 68*16, pixels: 2,088,960
+    "9:16": "1088x1920",   // pixels: 2,088,960
+    "1:1": "1024x1024",    // pixels: 1,048,576
+    "4:3": "1280x960",     // 960 = 60*16, pixels: 1,228,800
+    "3:4": "960x1280",     // pixels: 1,228,800
+    "16:10": "1920x1200",  // 1200 = 75*16, pixels: 2,304,000
+    "2:1": "1920x960",     // pixels: 1,843,200
+    "4K": "1920x1088",     // 4K 超过限制，降级到 1080p
   };
-  return ratioMap[ratio] || "1920x1080";
+  return ratioMap[ratio] || "1920x1088";
 }
 
 export class ZhipuVideoProvider implements VideoProvider {
