@@ -2,17 +2,15 @@ import type { AIProvider, TextOptions, ImageOptions } from "../types";
 import fs from "node:fs";
 import path from "node:path";
 import { ulid } from "ulid";
+import ZhipuAI from "zhipuai-sdk-nodejs-v4";
 
 interface ZhipuImageResponse {
   created: number;
-  data: Array<{
-    url: string;
-  }>;
+  data: Array<string>;
 }
 
 export class ZhipuImageProvider implements AIProvider {
-  private apiKey: string;
-  private baseUrl: string;
+  private client: ZhipuAI;
   private model: string;
   private uploadDir: string;
 
@@ -22,14 +20,13 @@ export class ZhipuImageProvider implements AIProvider {
     model?: string;
     uploadDir?: string;
   }) {
-    this.apiKey = (params?.apiKey || process.env.ZHIPU_API_KEY || "").trim();
-    this.baseUrl = (
-      params?.baseUrl ||
-      process.env.ZHIPU_BASE_URL ||
-      "https://open.bigmodel.cn/api/paas/v4"
-    ).replace(/\/+$/, "");
+    const apiKey = (params?.apiKey || process.env.ZHIPU_API_KEY || "").trim();
     this.model = params?.model || process.env.ZHIPU_IMAGE_MODEL || "cogview-3-plus";
     this.uploadDir = params?.uploadDir || process.env.UPLOAD_DIR || "./uploads";
+
+    this.client = new ZhipuAI({
+      apiKey,
+    });
   }
 
   async generateText(_prompt: string, _options?: TextOptions): Promise<string> {
@@ -39,36 +36,20 @@ export class ZhipuImageProvider implements AIProvider {
   async generateImage(prompt: string, options?: ImageOptions): Promise<string> {
     const size = this.mapSize(options?.aspectRatio || "1:1");
 
-    const body: Record<string, unknown> = {
+    console.log(`[Zhipu Image] Generating: model=${this.model}, size=${size}`);
+
+    const res = await this.client.images.create({
       model: this.model,
       prompt,
       size,
-      n: 1,
-    };
-
-    console.log(`[Zhipu Image] Generating: model=${this.model}, size=${size}`);
-
-    const res = await fetch(`${this.baseUrl}/images/generations`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.apiKey}`,
-      },
-      body: JSON.stringify(body),
     });
 
-    if (!res.ok) {
-      const errText = await res.text().catch(() => "");
-      throw new Error(`Zhipu image generation failed: ${res.status} ${errText}`);
+    // SDK returns { created, data: [url1, url2, ...] }
+    if (!res || !res.data || res.data.length === 0) {
+      throw new Error("Zhipu image: no images in response");
     }
 
-    const json = (await res.json()) as ZhipuImageResponse;
-
-    if (!json.data?.[0]?.url) {
-      throw new Error("Zhipu image: no URL in response");
-    }
-
-    const imageUrl = json.data[0].url;
+    const imageUrl = res.data[0];
     console.log(`[Zhipu Image] Got URL: ${imageUrl}`);
 
     // Download to local storage
@@ -91,13 +72,12 @@ export class ZhipuImageProvider implements AIProvider {
     // 2. 必须是 16 的整数倍
     // 3. 最大像素数不超过 2^21 (约 2,097,152)
     const sizeMap: Record<string, string> = {
-      "1:1": "1024x1024",    // 1,048,576 px
+      "1:1": "1024x1024",
       "16:9": "1920x1088",   // 2,088,960 px (1088 = 68*16)
-      "9:16": "1088x1920",   // 2,088,960 px
-      "4:3": "1280x960",     // 1,228,800 px (960 = 60*16)
-      "3:4": "960x1280",     // 1,228,800 px
-      "16:10": "1920x1200",  // 2,304,000 px (1200 = 75*16)
+      "9:16": "1088x1920",
+      "4:3": "960x1280",
+      "3:4": "1280x960",
     };
-    return sizeMap[aspectRatio] || "1024x1024";
+    return sizeMap[aspectRatio] || sizeMap[aspectRatio] || "1024x1024";
   }
 }
