@@ -9,6 +9,13 @@ interface ZhipuImageResponse {
   data: Array<string>;
 }
 
+interface ZhipuErrorResponse {
+  error?: {
+    code?: string | number;
+    message?: string;
+  };
+}
+
 export class ZhipuImageProvider implements AIProvider {
   private client: ZhipuAI;
   private model: string;
@@ -20,13 +27,11 @@ export class ZhipuImageProvider implements AIProvider {
     model?: string;
     uploadDir?: string;
   }) {
-    const apiKey = (params?.apiKey || process.env.ZHIPU_API_KEY || "").trim();
+    this.client = new ZhipuAI({
+      apiKey: (params?.apiKey || process.env.ZHIPU_API_KEY || "").trim(),
+    });
     this.model = params?.model || process.env.ZHIPU_IMAGE_MODEL || "cogview-3-plus";
     this.uploadDir = params?.uploadDir || process.env.UPLOAD_DIR || "./uploads";
-
-    this.client = new ZhipuAI({
-      apiKey,
-    });
   }
 
   async generateText(_prompt: string, _options?: TextOptions): Promise<string> {
@@ -38,32 +43,48 @@ export class ZhipuImageProvider implements AIProvider {
 
     console.log(`[Zhipu Image] Generating: model=${this.model}, size=${size}`);
 
-    const res = await this.client.images.create({
-      model: this.model,
-      prompt,
-      size,
-    });
+    try {
+      const res = await this.client.images.create({
+        model: this.model,
+        prompt,
+        size,
+      });
 
-    // SDK returns { created, data: [url1, url2, ...] }
-    if (!res || !res.data || res.data.length === 0) {
-      throw new Error("Zhipu image: no images in response");
+      // SDK returns { created, data: [url1, url2, ...] } on success
+      // On error, throws an object with { error: { code, message } }
+      if (!res || typeof res !== "object") {
+        throw new Error(`Zhipu image: unexpected response type: ${typeof res}`);
+      }
+
+      // Check if it's an error response
+      const errRes = res as ZhipuErrorResponse;
+      if (errRes.error) {
+        throw new Error(`Zhipu image error: ${errRes.error.code} ${errRes.error.message}`);
+      }
+
+      if (!res.data || res.data.length === 0) {
+        throw new Error("Zhipu image: no images in response");
+      }
+
+      const imageUrl = res.data[0];
+      console.log(`[Zhipu Image] Got URL: ${imageUrl}`);
+
+      // Download to local storage
+      const imageRes = await fetch(imageUrl);
+      const buffer = Buffer.from(await imageRes.arrayBuffer());
+      const ext = imageUrl.split("?")[0].split(".").pop() || "png";
+      const filename = `${ulid()}.${ext}`;
+      const dir = path.join(this.uploadDir, "images");
+      fs.mkdirSync(dir, { recursive: true });
+      const filepath = path.join(dir, filename);
+      fs.writeFileSync(filepath, buffer);
+
+      console.log(`[Zhipu Image] Saved to ${filepath}`);
+      return filepath;
+    } catch (err) {
+      console.error("[Zhipu Image] Error:", err);
+      throw err;
     }
-
-    const imageUrl = res.data[0];
-    console.log(`[Zhipu Image] Got URL: ${imageUrl}`);
-
-    // Download to local storage
-    const imageRes = await fetch(imageUrl);
-    const buffer = Buffer.from(await imageRes.arrayBuffer());
-    const ext = imageUrl.split("?")[0].split(".").pop() || "png";
-    const filename = `${ulid()}.${ext}`;
-    const dir = path.join(this.uploadDir, "images");
-    fs.mkdirSync(dir, { recursive: true });
-    const filepath = path.join(dir, filename);
-    fs.writeFileSync(filepath, buffer);
-
-    console.log(`[Zhipu Image] Saved to ${filepath}`);
-    return filepath;
   }
 
   private mapSize(aspectRatio: string): string {
