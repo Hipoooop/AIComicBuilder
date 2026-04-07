@@ -12,7 +12,7 @@ export class OpenAIProvider implements AIProvider {
   constructor(params?: { apiKey?: string; baseURL?: string; model?: string; uploadDir?: string; }) {
     this.client = new OpenAI({
       apiKey: params?.apiKey || process.env.OPENAI_API_KEY,
-      baseURL: params?.baseURL || process.env.OPENAI_BASE_URL,
+      baseURL: (params?.baseURL || process.env.OPENAI_BASE_URL)?.trim(),
     });
     this.defaultModel = params?.model || process.env.OPENAI_MODEL || "gpt-4o";
     this.uploadDir = params?.uploadDir || process.env.UPLOAD_DIR || "./uploads";
