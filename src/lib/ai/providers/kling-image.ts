@@ -81,7 +81,9 @@ export class KlingImageProvider implements AIProvider {
     });
 
     if (!submitRes.ok) {
-      throw new Error(`Kling image submit failed: ${submitRes.status}`);
+      const errText = await submitRes.text().catch(() => "");
+      console.error(`[Kling Image] Submit failed: ${submitRes.status}`, errText);
+      throw new Error(`Kling image submit failed: ${submitRes.status} ${errText}`);
     }
 
     const submitJson = (await submitRes.json()) as KlingResponse<{ task_id: string }>;
