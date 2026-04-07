@@ -35,6 +35,7 @@ function getProtocolOptions(capability: Capability): { value: Protocol; label: s
       { value: "openai", label: "OpenAI" },
       { value: "gemini", label: "Gemini" },
       { value: "kling", label: "Kling" },
+      { value: "zhipu", label: "智谱 (CogView)" },
     ];
   }
   // video
