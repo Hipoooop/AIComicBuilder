@@ -28,6 +28,7 @@ function getProtocolOptions(capability: Capability): { value: Protocol; label: s
     return [
       { value: "openai", label: "OpenAI" },
       { value: "gemini", label: "Gemini" },
+      { value: "zhipu", label: "智谱 (GLM)" },
     ];
   }
   if (capability === "image") {

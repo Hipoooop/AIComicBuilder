@@ -113,6 +113,14 @@ export function createVideoProvider(config: ProviderConfig, uploadDir?: string):
 
 export function resolveAIProvider(modelConfig?: ModelConfigPayload): AIProvider {
   if (modelConfig?.text) {
+    // 智谱 GLM API 与 OpenAI 完全兼容，使用 OpenAIProvider
+    if (modelConfig.text.protocol === "zhipu") {
+      return new OpenAIProvider({
+        apiKey: modelConfig.text.apiKey,
+        baseURL: modelConfig.text.baseUrl,
+        model: modelConfig.text.modelId,
+      });
+    }
     return createAIProvider(modelConfig.text);
   }
   return getAIProvider();

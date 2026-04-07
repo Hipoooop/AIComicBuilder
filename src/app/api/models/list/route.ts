@@ -108,6 +108,13 @@ export async function POST(request: Request) {
     if (body.protocol === "zhipu") {
       return NextResponse.json({
         models: [
+          // Text models (GLM)
+          { id: "glm-4-flash", name: "GLM-4 Flash (免费)" },
+          { id: "glm-4-air", name: "GLM-4 Air" },
+          { id: "glm-4-long", name: "GLM-4 Long" },
+          { id: "glm-4-plus", name: "GLM-4 Plus" },
+          { id: "glm-4v-plus", name: "GLM-4V Plus (多模态)" },
+          { id: "glm-4v-flash", name: "GLM-4V Flash (多模态免费)" },
           // Image models (CogView)
           { id: "cogview-3-flash", name: "CogView-3 Flash (免费)" },
           { id: "cogview-3-plus", name: "CogView-3 Plus" },
