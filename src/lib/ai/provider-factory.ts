@@ -6,6 +6,7 @@ import { KlingImageProvider } from "./providers/kling-image";
 import { KlingVideoProvider } from "./providers/kling-video";
 import { WanVideoProvider } from "./providers/wan-video";
 import { UCloudSeedanceProvider } from "./providers/ucloud-seedance";
+import { ZhipuVideoProvider } from "./providers/zhipu-video";
 import { getAIProvider, getVideoProvider } from "./index";
 import type { AIProvider, VideoProvider } from "./types";
 
@@ -85,6 +86,13 @@ export function createVideoProvider(config: ProviderConfig, uploadDir?: string):
       });
     case "ucloud-seedance":
       return new UCloudSeedanceProvider({
+        apiKey: config.apiKey,
+        baseUrl: config.baseUrl,
+        model: config.modelId,
+        ...(uploadDir && { uploadDir }),
+      });
+    case "zhipu":
+      return new ZhipuVideoProvider({
         apiKey: config.apiKey,
         baseUrl: config.baseUrl,
         model: config.modelId,

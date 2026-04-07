@@ -20,6 +20,7 @@ const DEFAULT_BASE_URLS: Record<Protocol, string> = {
   "ucloud-seedance": "https://api.modelverse.cn",
   kling: "https://api.klingai.com",
   wan: "https://dashscope.aliyuncs.com/api/v1",
+  zhipu: "https://open.bigmodel.cn/api/paas/v4",
 };
 
 function getProtocolOptions(capability: Capability): { value: Protocol; label: string }[] {
@@ -43,6 +44,7 @@ function getProtocolOptions(capability: Capability): { value: Protocol; label: s
     { value: "gemini", label: "Gemini (Veo)" },
     { value: "kling", label: "Kling" },
     { value: "wan", label: "Wan (通义万相)" },
+    { value: "zhipu", label: "智谱 (CogVideoX)" },
   ];
 }
 
