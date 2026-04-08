@@ -42,13 +42,23 @@ The provider system uses a protocol-based factory pattern. Each provider impleme
 - `gemini` - Google Gemini/Imagen/Veo
 - `kling` - Kling AI (image/video, requires AK+SK)
 - `seedance` - ByteDance Seedance (video)
-- `zhipu` - Zhipu CogVideoX (video)
+- `zhipu` - Zhipu AI (text GLM / image CogView / video CogVideoX)
+
+**Default Base URLs:**
+- Kling: `https://api-beijing.klingai.com`
+- Zhipu: `https://open.bigmodel.cn/api/paas/v4`
+
+**API Limitations:**
+- Kling image: prompt max 2500 chars (auto-truncated to 2400)
+- Zhipu image/video: size must be multiples of 16, max 2^21 pixels (use 1920x1088 not 1920x1080)
+- Zhipu text API is OpenAI-compatible (uses OpenAIProvider)
 
 **Adding a New Provider:**
 1. Create provider class in `src/lib/ai/providers/` implementing `AIProvider` or `VideoProvider`
-2. Register in `src/lib/ai/provider-factory.ts`
+2. Register in `src/lib/ai/provider-factory.ts` and `src/lib/ai/ai-sdk.ts` (for text)
 3. Add protocol type to `src/stores/model-store.ts`
-4. Add UI options in `src/components/settings/provider-form.tsx`
+4. Add hardcoded models in `src/app/api/models/list/route.ts`
+5. Add UI options in `src/components/settings/provider-form.tsx`
 
 ### Pipeline Architecture
 
