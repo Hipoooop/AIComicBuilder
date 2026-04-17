@@ -21,6 +21,7 @@ const DEFAULT_BASE_URLS: Record<Protocol, string> = {
   kling: "https://api-beijing.klingai.com",
   wan: "https://dashscope.aliyuncs.com/api/v1",
   zhipu: "https://open.bigmodel.cn/api/paas/v4",
+  vidu: "https://dashscope.aliyuncs.com/api/v1",
 };
 
 function getProtocolOptions(capability: Capability): { value: Protocol; label: string }[] {
@@ -37,6 +38,7 @@ function getProtocolOptions(capability: Capability): { value: Protocol; label: s
       { value: "gemini", label: "Gemini" },
       { value: "kling", label: "Kling" },
       { value: "zhipu", label: "智谱 (CogView)" },
+      { value: "wan", label: "通义万相" },
     ];
   }
   // video
@@ -46,6 +48,7 @@ function getProtocolOptions(capability: Capability): { value: Protocol; label: s
     { value: "gemini", label: "Gemini (Veo)" },
     { value: "kling", label: "Kling" },
     { value: "wan", label: "Wan (通义万相)" },
+    { value: "vidu", label: "Vidu" },
     { value: "zhipu", label: "智谱 (CogVideoX)" },
   ];
 }

@@ -101,6 +101,25 @@ export async function POST(request: Request) {
           { id: "wan2.6-i2v", name: "Wan 2.6 图生视频" },
           { id: "wan2.6-r2v", name: "Wan 2.6 参考生视频" },
           { id: "wan2.6-r2v-flash", name: "Wan 2.6 参考生视频 Flash" },
+          // 通义万相 image models
+          { id: "wan2.6-t2i", name: "Wan 2.6 文生图" },
+          { id: "wan2.5-t2i-preview", name: "Wan 2.5 文生图" },
+          { id: "wan2.2-t2i-flash", name: "Wan 2.2 Flash 文生图" },
+          { id: "wan2.2-t2i-plus", name: "Wan 2.2 Plus 文生图" },
+        ],
+      });
+    }
+
+    if (body.protocol === "vidu") {
+      return NextResponse.json({
+        models: [
+          { id: "vidu/viduq3-pro_text2video", name: "Vidu Q3 Pro 文生视频" },
+          { id: "vidu/viduq3-turbo_text2video", name: "Vidu Q3 Turbo 文生视频" },
+          { id: "vidu/viduq2_text2video", name: "Vidu Q2 文生视频" },
+          { id: "vidu/viduq3-pro_start-end2video", name: "Vidu Q3 Pro 首尾帧" },
+          { id: "vidu/viduq3-turbo_start-end2video", name: "Vidu Q3 Turbo 首尾帧" },
+          { id: "vidu/viduq2-pro_start-end2video", name: "Vidu Q2 Pro 首尾帧" },
+          { id: "vidu/viduq2-turbo_start-end2video", name: "Vidu Q2 Turbo 首尾帧" },
         ],
       });
     }

@@ -5,9 +5,11 @@ import { VeoProvider } from "./providers/veo";
 import { KlingImageProvider } from "./providers/kling-image";
 import { KlingVideoProvider } from "./providers/kling-video";
 import { WanVideoProvider } from "./providers/wan-video";
+import { WanImageProvider } from "./providers/wan-image";
 import { UCloudSeedanceProvider } from "./providers/ucloud-seedance";
 import { ZhipuImageProvider } from "./providers/zhipu-image";
 import { ZhipuVideoProvider } from "./providers/zhipu-video";
+import { ViduVideoProvider } from "./providers/vidu-video";
 import { getAIProvider, getVideoProvider } from "./index";
 import type { AIProvider, VideoProvider } from "./types";
 
@@ -51,6 +53,13 @@ export function createAIProvider(config: ProviderConfig, uploadDir?: string): AI
       });
     case "zhipu":
       return new ZhipuImageProvider({
+        apiKey: config.apiKey,
+        baseUrl: config.baseUrl,
+        model: config.modelId,
+        ...(uploadDir && { uploadDir }),
+      });
+    case "wan":
+      return new WanImageProvider({
         apiKey: config.apiKey,
         baseUrl: config.baseUrl,
         model: config.modelId,
@@ -101,6 +110,13 @@ export function createVideoProvider(config: ProviderConfig, uploadDir?: string):
       });
     case "zhipu":
       return new ZhipuVideoProvider({
+        apiKey: config.apiKey,
+        baseUrl: config.baseUrl,
+        model: config.modelId,
+        ...(uploadDir && { uploadDir }),
+      });
+    case "vidu":
+      return new ViduVideoProvider({
         apiKey: config.apiKey,
         baseUrl: config.baseUrl,
         model: config.modelId,

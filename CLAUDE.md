@@ -67,15 +67,17 @@ Protocol-based factory pattern. Each provider implements `AIProvider` (text/imag
 | `gemini` | Gemini | Imagen | Veo | Uses `@ai-sdk/google` for text |
 | `kling` | — | Kling Image | Kling Video | Requires AK+SK; image prompt max 2500 chars |
 | `seedance` | — | — | Seedance | ByteDance video model |
+| `ucloud-seedance` | — | — | Seedance via UCloud | UCloud-hosted Seedance |
+| `wan` | — | — | Wan Video | Alibaba Wan video model |
 | `zhipu` | GLM (via OpenAI) | CogView | CogVideoX | Text API is OpenAI-compatible; image/video sizes must be multiples of 16 |
 
 **Factory functions:** `createAIProvider()`, `createVideoProvider()`, `resolveAIProvider()`, `resolveImageProvider()`, `resolveVideoProvider()` — all in `src/lib/ai/provider-factory.ts`
 
 **Adding a New Provider:**
-1. Create provider class in `src/lib/ai/providers/` implementing `AIProvider` or `VideoProvider`
-2. Register in `src/lib/ai/provider-factory.ts` (both `createAIProvider` and `createVideoProvider` switches)
+1. Create provider class in `src/lib/ai/providers/` implementing `AIProvider` or `VideoProvider` (from `src/lib/ai/types.ts`)
+2. Register in `src/lib/ai/provider-factory.ts` — add to `createAIProvider()` for image providers, `createVideoProvider()` for video providers
 3. If text provider: also add to `src/lib/ai/ai-sdk.ts`
-4. Add protocol type to `src/stores/model-store.ts`
+4. Add protocol type to `src/stores/model-store.ts` protocol union type
 5. Add hardcoded models in `src/app/api/models/list/route.ts`
 6. Add UI options in `src/components/settings/provider-form.tsx`
 
@@ -86,6 +88,7 @@ Each pipeline stage is a self-contained module in `src/lib/pipeline/`. Stages us
 **Pipeline Modules (registered in `src/lib/pipeline/index.ts`):**
 | Module | Task Type | Description |
 |--------|-----------|-------------|
+| `script-outline.ts` | `script_outline` | Generate script outline |
 | `script-parse.ts` | `script_parse` | Parse uploaded scripts |
 | `character-extract.ts` | `character_extract` | Extract characters from script |
 | `character-image.ts` | `character_image` | Generate character 4-view reference images |
@@ -93,6 +96,8 @@ Each pipeline stage is a self-contained module in `src/lib/pipeline/`. Stages us
 | `frame-generate.ts` | `frame_generate` | Generate first/last frames per shot |
 | `video-generate.ts` | `video_generate` | Generate video clips from frames |
 | `video-assemble.ts` | `video_assemble` | Concatenate clips with subtitles |
+
+Additional pipeline modules not registered in the main handler (used internally): `continuity-check.ts`, `video-quality-check.ts`.
 
 ### Prompt Template System
 
@@ -120,6 +125,31 @@ Notable fields:
 - `projects.useProjectPrompts`: Enable project-level prompt overrides
 - `shots.status`: `"pending" | "generating" | "completed" | "failed"`
 - `tasks.type`: One of the 7 pipeline task types; tasks auto-retry up to `maxRetries` (default 3)
+
+### Storyboard Versioning
+
+Episodes support multiple storyboard versions (`StoryboardVersion` table). Each version has its own set of shots, enabling A/B comparison and iteration. The `versionNum` and `label` fields identify versions; shots are scoped to a specific version via `versionId`. The UI allows switching between versions and creating new ones.
+
+### Script Import Pipeline
+
+Separate from the main generation pipeline, the import flow handles file uploads (TXT/DOCX/PDF) through multi-step processing:
+1. File upload → `/api/uploads/` stores the file
+2. Script parse → extracts text from uploaded file
+3. Character extraction → identifies characters from parsed text (`import_character_extract` prompt)
+4. Script splitting → divides long scripts into episodes (`script_split` prompt)
+5. Auto-generate → creates episodes and assigns characters
+
+Import state is tracked via the `ImportLogs` table.
+
+### Client State Management
+
+Zustand stores in `src/stores/`:
+- `model-store.ts` — AI provider/model configuration (persisted to localStorage)
+- `project-store.ts` — Current project state, episode/shot selection, storyboard version
+- `prompt-template-store.ts` — Prompt template overrides and presets
+- `episode-store.ts` — Episode list management
+
+API calls from stores go through `src/lib/api-fetch.ts`, a thin wrapper around fetch with base URL handling.
 
 ### Build & Deployment
 
