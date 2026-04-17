@@ -312,7 +312,7 @@ export function CharacterCard({
                 className="shrink-0 px-2.5"
                 title="Copy image prompt"
                 onClick={async () => {
-                  const prompt = buildCharacterTurnaroundPrompt(editDesc || editName, editName);
+                  const prompt = buildCharacterTurnaroundPrompt(editDesc || editName, editName, editVisualHint);
                   await navigator.clipboard.writeText(prompt);
                   setCopied(true);
                   setTimeout(() => setCopied(false), 2000);

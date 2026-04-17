@@ -1,4 +1,4 @@
-export function buildCharacterTurnaroundPrompt(description: string, characterName?: string): string {
+export function buildCharacterTurnaroundPrompt(description: string, characterName?: string, visualHint?: string): string {
   return `Character four-view reference sheet — professional character design document.
 
 === CRITICAL: ART STYLE FIDELITY ===
@@ -13,7 +13,7 @@ Rules for interpreting style:
 6. If no style is mentioned at all, infer the most appropriate stylized illustration from the character's setting and genre. Default to stylized illustration, NOT photography.
 
 === CHARACTER DESCRIPTION (authoritative) ===
-${characterName ? `Name: ${characterName}\n` : ''}${description}
+${characterName ? `Name: ${characterName}\n` : ''}${description}${visualHint ? `\n\nVisual Appearance: ${visualHint}` : ''}
 
 === FACE — HIGH DETAIL ===
 Render the face with precision appropriate to the chosen medium and style:

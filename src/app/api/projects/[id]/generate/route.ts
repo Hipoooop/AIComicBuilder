@@ -681,7 +681,7 @@ async function handleSingleCharacterImage(
   }
 
   const ai = resolveImageProvider(modelConfig);
-  const prompt = buildCharacterTurnaroundPrompt(character.description || character.name, character.name);
+  const prompt = buildCharacterTurnaroundPrompt(character.description || character.name, character.name, character.visualHint || undefined);
 
   try {
     const imagePath = await ai.generateImage(prompt, {
@@ -774,7 +774,7 @@ async function handleBatchCharacterImage(
   const results = await Promise.all(
     needImages.map(async (character) => {
       try {
-        const prompt = buildCharacterTurnaroundPrompt(character.description || character.name, character.name);
+        const prompt = buildCharacterTurnaroundPrompt(character.description || character.name, character.name, character.visualHint || undefined);
         const imagePath = await ai.generateImage(prompt, {
           size: "2560x1440",
           aspectRatio: "16:9",

@@ -39,7 +39,7 @@ export async function POST(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const body = (await request.json()) as {
+  let body: {
     episodes: EpisodeData[];
     characters: CharacterData[];
     relationships?: Array<{
@@ -50,14 +50,35 @@ export async function POST(
     }>;
   };
 
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  try {
   await addImportLog(
     projectId, 4, "running",
     `开始创建 ${body.episodes.length} 集和 ${body.characters.length} 个角色`
   );
 
   // 1. Create all characters (main + guest), build name→id map
+  // Deduplicate: reuse existing characters with the same name
   const charIdByName = new Map<string, string>();
   for (const char of body.characters) {
+    const key = char.name.toLowerCase().trim();
+    // Skip if already mapped in this batch
+    if (charIdByName.has(key)) continue;
+
+    // Check if character already exists in DB
+    const [existing] = await db.select({ id: characters.id })
+      .from(characters)
+      .where(and(eq(characters.projectId, projectId), eq(characters.name, char.name)));
+    if (existing) {
+      charIdByName.set(key, existing.id);
+      continue;
+    }
+
     const charId = genId();
     await db.insert(characters).values({
       id: charId,
@@ -66,9 +87,9 @@ export async function POST(
       description: char.description,
       visualHint: char.visualHint ?? "",
       scope: char.scope,
-      episodeId: null, // all characters are project-level now
+      episodeId: null,
     });
-    charIdByName.set(char.name.toLowerCase().trim(), charId);
+    charIdByName.set(key, charId);
   }
 
   // 1b. Create character relationships
@@ -95,7 +116,7 @@ export async function POST(
 
   await addImportLog(
     projectId, 4, "running",
-    `已创建 ${body.characters.length} 个角色${body.relationships?.length ? `和 ${body.relationships.length} 个关系` : ""}`
+    `已创建 ${charIdByName.size} 个角色${body.relationships?.length ? `和 ${body.relationships.length} 个关系` : ""}`
   );
 
   // 2. Create episodes
@@ -117,6 +138,7 @@ export async function POST(
         description: ep.description || "",
         keywords: ep.keywords || "",
         idea: ep.idea || "",
+        script: ep.idea || "",
         sequence: seq++,
       })
       .returning();
@@ -133,23 +155,39 @@ export async function POST(
     for (const charName of epData.characters) {
       const charId = charIdByName.get(charName.toLowerCase().trim());
       if (!charId) continue;
-      await db.insert(episodeCharacters).values({
-        id: genId(),
-        episodeId,
-        characterId: charId,
-      });
-      relationCount++;
+      try {
+        await db.insert(episodeCharacters).values({
+          id: genId(),
+          episodeId,
+          characterId: charId,
+        });
+        relationCount++;
+      } catch {
+        // skip duplicate episode-character links
+      }
     }
   }
 
   await addImportLog(
     projectId, 4, "done",
-    `导入完成！创建了 ${body.characters.length} 个角色和 ${created.length} 集（${relationCount} 个角色分配）`,
-    { episodeCount: created.length, characterCount: body.characters.length }
+    `导入完成！创建了 ${charIdByName.size} 个角色和 ${created.length} 集（${relationCount} 个角色分配）`,
+    { episodeCount: created.length, characterCount: charIdByName.size }
   );
 
   return NextResponse.json({
     episodes: created,
-    characterCount: body.characters.length,
+    characterCount: charIdByName.size,
   }, { status: 201 });
+
+  } catch (err) {
+    console.error("[import/generate] Error:", err);
+    try {
+      await addImportLog(projectId, 4, "error",
+        `导入失败: ${err instanceof Error ? err.message : String(err)}`);
+    } catch {}
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Internal error" },
+      { status: 500 }
+    );
+  }
 }

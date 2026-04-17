@@ -126,9 +126,10 @@ export default function ImportPage({
   }, [logs]);
 
   const addLog = useCallback((step: Step, status: LogEntry["status"], message: string) => {
+    const now = Date.now();
     setLogs((prev) => [
       ...prev,
-      { id: Date.now().toString(), step, status, message, createdAt: Date.now() },
+      { id: `${now}-${prev.length}`, step, status, message, createdAt: now },
     ]);
   }, []);
 
@@ -276,20 +277,17 @@ export default function ImportPage({
   }
 
   // ── Step 4: Generate (triggered by user after reviewing episodes) ──
-  async function runGenerate() {
+  async function runGenerate(overrideData?: { episodes: SplitEpisode[]; characters: ExtractedCharacter[]; relationships: typeof relationships }) {
+    const dataToSend = overrideData || { episodes, characters, relationships };
     setCurrentStep(4);
     setStepStatus((prev) => ({ ...prev, 4: "running" }));
-    addLog(4, "running", `创建 ${episodes.length} 集和角色...`);
+    addLog(4, "running", `创建 ${dataToSend.episodes.length} 集和角色...`);
 
     try {
       const res = await apiFetch(`/api/projects/${projectId}/import/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          episodes,
-          characters,
-          relationships,
-        }),
+        body: JSON.stringify(dataToSend),
       });
       if (!res.ok) {
         const err = await res.json();
@@ -313,10 +311,32 @@ export default function ImportPage({
   function retryStep() {
     const failedStep = ([1, 2, 3, 4] as Step[]).find((s) => stepStatus[s] === "error");
     if (!failedStep) return;
+
+    if (failedStep === 1) {
+      if (!file) {
+        toast.error(t("selectFile"));
+        return;
+      }
+      startPipeline();
+      return;
+    }
+
+    // For steps 2-4, restore data from log metadata
+    const step2Log = logs.find((l) => l.step === 2 && l.status === "done" && l.metadata);
+    const step2Meta = step2Log?.metadata as Record<string, unknown> | undefined;
+    const restoredChars = (step2Meta?.characters || characters) as ExtractedCharacter[];
+    const restoredRels = (step2Meta?.relationships || relationships) as typeof relationships;
+
+    const step3Log = logs.find((l) => l.step === 3 && l.status === "done" && l.metadata);
+    const step3Meta = step3Log?.metadata as Record<string, unknown> | undefined;
+    const restoredEps = (step3Meta?.episodes || episodes) as SplitEpisode[];
+
+    setHistoryMode(false);
+    setCharacters(restoredChars);
+    setRelationships(restoredRels);
+    setEpisodes(restoredEps);
+
     switch (failedStep) {
-      case 1: // Re-run full pipeline (need file again)
-        startPipeline();
-        break;
       case 2:
         retryCharacterExtract();
         break;
@@ -324,7 +344,7 @@ export default function ImportPage({
         runSplit();
         break;
       case 4:
-        runGenerate();
+        runGenerate({ episodes: restoredEps, characters: restoredChars, relationships: restoredRels });
         break;
     }
   }
@@ -557,7 +577,7 @@ export default function ImportPage({
               <h3 className="font-display text-lg font-bold text-[--text-primary]">
                 {t("reviewEpisodes")} ({episodes.length})
               </h3>
-              <Button onClick={runGenerate} className="rounded-xl">
+              <Button onClick={() => runGenerate()} className="rounded-xl">
                 {t("confirmAndGenerate")}
               </Button>
             </div>
@@ -680,7 +700,7 @@ export default function ImportPage({
               </div>
 
               {/* Retry button when a step has failed */}
-              {([1, 2, 3, 4] as Step[]).some((s) => stepStatus[s] === "error") && !historyMode && (
+              {([1, 2, 3, 4] as Step[]).some((s) => stepStatus[s] === "error") && (
                 <Button
                   variant="outline"
                   size="sm"

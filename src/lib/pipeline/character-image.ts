@@ -19,7 +19,7 @@ export async function handleCharacterImage(task: Task) {
   }
 
   const ai = resolveImageProvider(payload.modelConfig);
-  const prompt = buildCharacterTurnaroundPrompt(character.description || character.name, character.name);
+  const prompt = buildCharacterTurnaroundPrompt(character.description || character.name, character.name, character.visualHint || undefined);
 
   const imagePath = await ai.generateImage(prompt, {
     size: "2560x1440",
