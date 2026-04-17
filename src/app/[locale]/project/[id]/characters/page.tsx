@@ -19,6 +19,7 @@ interface Character {
   referenceImageHistory: string | null;
   scope: string;
   episodeId: string | null;
+  ttsVoice?: string | null;
 }
 
 interface Episode {
@@ -163,6 +164,7 @@ export default function CharactersPage({
                 visualHint={char.visualHint}
                 referenceImage={char.referenceImage}
                 referenceImageHistory={char.referenceImageHistory}
+                ttsVoice={char.ttsVoice}
                 scope={char.scope}
                 onUpdate={fetchData}
                 onDelete={() => handleDelete(char.id, char.name)}
@@ -217,6 +219,7 @@ export default function CharactersPage({
                         visualHint={char.visualHint}
                         referenceImage={char.referenceImage}
                         referenceImageHistory={char.referenceImageHistory}
+                        ttsVoice={char.ttsVoice}
                         scope={char.scope}
                         episodeName={`EP.${String(ep.sequence).padStart(2, "0")} ${ep.title}`}
                         onUpdate={fetchData}

@@ -8,8 +8,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { useTranslations } from "next-intl";
 import { uploadUrl } from "@/lib/utils/upload-url";
 import { useModelStore, type ModelRef } from "@/stores/model-store";
-import { Sparkles, Loader2, Copy, Check, ArrowUpCircle, Trash2, ChevronLeft, ChevronRight, Upload } from "lucide-react";
+import { Sparkles, Loader2, Copy, Check, ArrowUpCircle, Trash2, ChevronLeft, ChevronRight, Upload, Volume2 } from "lucide-react";
 import { InlineModelPicker } from "@/components/editor/model-selector";
+import { CHINESE_VOICES } from "@/lib/ai/providers/tts-voices";
 import { apiFetch } from "@/lib/api-fetch";
 import { useModelGuard } from "@/hooks/use-model-guard";
 import { toast } from "sonner";
@@ -23,6 +24,7 @@ interface CharacterCardProps {
   visualHint: string | null;
   referenceImage: string | null;
   referenceImageHistory?: string | null;
+  ttsVoice?: string | null;
   onUpdate: () => void;
   batchGenerating?: boolean;
   scope?: string;
@@ -39,6 +41,7 @@ export function CharacterCard({
   visualHint,
   referenceImage,
   referenceImageHistory,
+  ttsVoice,
   onUpdate,
   batchGenerating,
   scope,
@@ -254,6 +257,25 @@ export function CharacterCard({
           placeholder={t("character.visualHint")}
           className="h-8 text-xs text-muted-foreground"
         />
+        <div className="flex items-center gap-2">
+          <Volume2 className="h-3.5 w-3.5 flex-shrink-0 text-[--text-muted]" />
+          <select
+            value={ttsVoice || ""}
+            onChange={(e) => {
+              apiFetch(`/api/projects/${projectId}/characters/${id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ ttsVoice: e.target.value }),
+              }).then(() => onUpdate());
+            }}
+            className="h-7 flex-1 rounded-md border border-[--border-subtle] bg-white px-2 text-xs text-[--text-secondary] outline-none focus:border-primary/30"
+          >
+            <option value="">{t("character.defaultVoice")}</option>
+            {CHINESE_VOICES.map((v) => (
+              <option key={v.id} value={v.id}>{v.label}</option>
+            ))}
+          </select>
+        </div>
         <div className="space-y-2">
             <InlineModelPicker capability="image" value={imageModelRef} onChange={setImageModelRef} />
             <div className="flex gap-2">

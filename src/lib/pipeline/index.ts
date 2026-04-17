@@ -7,6 +7,7 @@ import { handleShotSplit } from "./shot-split";
 import { handleFrameGenerate } from "./frame-generate";
 import { handleVideoGenerate } from "./video-generate";
 import { handleVideoAssemble } from "./video-assemble";
+import { handleAudioGenerate } from "./audio-generate";
 
 export function registerPipelineHandlers() {
   registerHandlers({
@@ -17,6 +18,7 @@ export function registerPipelineHandlers() {
     shot_split: handleShotSplit,
     frame_generate: handleFrameGenerate,
     video_generate: handleVideoGenerate,
+    audio_generate: handleAudioGenerate,
     video_assemble: handleVideoAssemble,
   });
 }

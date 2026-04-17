@@ -10,6 +10,7 @@ interface Character {
   visualHint?: string | null;
   scope?: string;
   episodeId?: string | null;
+  ttsVoice?: string | null;
 }
 
 interface Dialogue {
@@ -201,6 +202,7 @@ interface Project {
   status: string;
   finalVideoUrl: string | null;
   generationMode: "keyframe" | "reference";
+  enableTts?: number;
   characters: Character[];
   shots: Shot[];
   versions: StoryboardVersion[];

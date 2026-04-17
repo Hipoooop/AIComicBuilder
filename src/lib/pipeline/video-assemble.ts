@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { shots, projects, episodes, dialogues, characters } from "@/lib/db/schema";
 import { eq, asc } from "drizzle-orm";
 import { assembleVideo } from "@/lib/video/ffmpeg";
+import type { DialogueAudioTrack } from "@/lib/video/ffmpeg";
 import { loadShotLegacyViewsBatch } from "@/lib/shot-asset-utils";
 import type { Task } from "@/lib/task-queue";
 
@@ -42,7 +43,7 @@ export async function handleVideoAssemble(task: Task) {
       : (nextShot?.transitionIn || "cut")) as TransitionType;
   });
 
-  // Get dialogues for subtitles
+  // Get dialogues for subtitles and TTS audio
   const subtitles: {
     text: string;
     shotSequence: number;
@@ -51,6 +52,7 @@ export async function handleVideoAssemble(task: Task) {
     startRatio?: number;
     endRatio?: number;
   }[] = [];
+  const dialogueAudios: DialogueAudioTrack[] = [];
 
   for (const shot of completedShots) {
     const shotDialogues = await db
@@ -61,6 +63,7 @@ export async function handleVideoAssemble(task: Task) {
         shotSequence: shots.sequence,
         startRatio: dialogues.startRatio,
         endRatio: dialogues.endRatio,
+        audioUrl: dialogues.audioUrl,
       })
       .from(dialogues)
       .innerJoin(characters, eq(dialogues.characterId, characters.id))
@@ -80,6 +83,16 @@ export async function handleVideoAssemble(task: Task) {
         startRatio: sr,
         endRatio: er,
       });
+
+      // Add TTS audio track if available
+      if (d.audioUrl) {
+        dialogueAudios.push({
+          audioPath: d.audioUrl,
+          shotSequence: d.shotSequence,
+          startRatio: sr ?? idx / Math.max(count, 1),
+          endRatio: er ?? (idx + 1) / Math.max(count, 1),
+        });
+      }
     });
   }
 
@@ -119,6 +132,7 @@ export async function handleVideoAssemble(task: Task) {
     bgmPath,
     titleCard,
     creditsCard,
+    dialogueAudios,
   });
 
   await db

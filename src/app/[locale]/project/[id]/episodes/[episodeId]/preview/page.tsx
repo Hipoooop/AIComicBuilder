@@ -20,6 +20,8 @@ import {
   Play,
   Monitor,
   Download,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api-fetch";
@@ -87,10 +89,26 @@ export default function EpisodePreviewPage() {
     setAssembling(true);
     checkedUrl.current = null;
     try {
+      const episodeId = useProjectStore.getState().currentEpisodeId;
+
+      // Step 1: Generate TTS audio if enabled
+      if (project.enableTts) {
+        try {
+          await apiFetch(`/api/projects/${project.id}/generate`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "audio_generate", episodeId }),
+          });
+        } catch (err) {
+          console.warn("TTS generation failed, continuing without audio:", err);
+        }
+      }
+
+      // Step 2: Assemble video
       const res = await apiFetch(`/api/projects/${project.id}/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "video_assemble", payload: versionId ? { versionId } : undefined, episodeId: useProjectStore.getState().currentEpisodeId }),
+        body: JSON.stringify({ action: "video_assemble", payload: versionId ? { versionId } : undefined, episodeId }),
       });
       await res.json();
     } catch (err) {
@@ -99,6 +117,25 @@ export default function EpisodePreviewPage() {
     }
     setAssembling(false);
     await fetchProject(project.id, useProjectStore.getState().currentEpisodeId!);
+  }
+
+  async function toggleTts() {
+    if (!project) return;
+    const newEnableTts = !project.enableTts;
+    const episodeId = useProjectStore.getState().currentEpisodeId;
+    const url = episodeId
+      ? `/api/projects/${project.id}/episodes/${episodeId}`
+      : `/api/projects/${project.id}`;
+    try {
+      await apiFetch(url, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enableTts: newEnableTts ? 1 : 0 }),
+      });
+      await fetchProject(project.id, episodeId!);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to toggle TTS");
+    }
   }
 
   function handleDownload() {
@@ -135,6 +172,22 @@ export default function EpisodePreviewPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={toggleTts}
+            className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-all ${
+              project.enableTts
+                ? "border-primary/30 bg-primary/8 text-primary"
+                : "border-[--border-subtle] text-[--text-muted] hover:border-[--border-hover]"
+            }`}
+            title={project.enableTts ? t("project.ttsEnabled") : t("project.ttsDisabled")}
+          >
+            {project.enableTts ? (
+              <Volume2 className="h-3.5 w-3.5" />
+            ) : (
+              <VolumeX className="h-3.5 w-3.5" />
+            )}
+            {t("project.dubbing")}
+          </button>
           {hasValidVideo && (
             <Button onClick={handleDownload} size="sm" variant="outline" className="border-emerald-300 text-emerald-700 hover:bg-emerald-100">
               <Download className="h-3.5 w-3.5" />

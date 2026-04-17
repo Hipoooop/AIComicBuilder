@@ -29,6 +29,7 @@ export async function PATCH(
     scope: string;
     episodeId: string | null;
     referenceImage: string;
+    ttsVoice: string;
   }>;
 
   // When promoting to main, auto-clear episodeId
@@ -37,6 +38,7 @@ export async function PATCH(
   if (body.description !== undefined) updateData.description = body.description;
   if (body.visualHint !== undefined) updateData.visualHint = body.visualHint;
   if (body.referenceImage !== undefined) updateData.referenceImage = body.referenceImage;
+  if (body.ttsVoice !== undefined) updateData.ttsVoice = body.ttsVoice;
   if (body.scope !== undefined) {
     updateData.scope = body.scope;
     if (body.scope === "main") {

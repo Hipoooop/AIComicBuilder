@@ -148,9 +148,10 @@ export async function PATCH(
     worldSetting: string;
     targetDuration: number;
     bgmUrl: string;
+    enableTts: number;
   }>;
 
-  const { title, idea, script, outline, status, generationMode, useProjectPrompts, colorPalette, worldSetting, targetDuration, bgmUrl } = body;
+  const { title, idea, script, outline, status, generationMode, useProjectPrompts, colorPalette, worldSetting, targetDuration, bgmUrl, enableTts } = body;
 
   const [updated] = await db
     .update(projects)
@@ -166,6 +167,7 @@ export async function PATCH(
       ...(worldSetting !== undefined && { worldSetting }),
       ...(targetDuration !== undefined && { targetDuration }),
       ...(bgmUrl !== undefined && { bgmUrl }),
+      ...(enableTts !== undefined && { enableTts }),
       updatedAt: new Date(),
     })
     .where(eq(projects.id, id))

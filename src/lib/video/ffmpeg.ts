@@ -18,6 +18,13 @@ interface SubtitleEntry {
   endRatio?: number;         // 0-1, when dialogue ends relative to shot duration
 }
 
+export interface DialogueAudioTrack {
+  audioPath: string;
+  shotSequence: number;      // 1-based shot index
+  startRatio: number;        // 0-1, when audio starts relative to shot duration
+  endRatio: number;          // 0-1, when audio ends relative to shot duration
+}
+
 interface AssembleParams {
   videoPaths: string[];
   subtitles: SubtitleEntry[];
@@ -28,6 +35,7 @@ interface AssembleParams {
   creditsCard?: { text: string; duration: number };
   bgmPath?: string;
   bgmVolume?: number; // 0.0-1.0, default 0.3
+  dialogueAudios?: DialogueAudioTrack[]; // TTS audio tracks to mix in
 }
 
 interface AssembleResult {
@@ -310,6 +318,83 @@ export async function assembleVideo(params: AssembleParams): Promise<AssembleRes
   } else {
     // No subtitles, just rename
     fs.renameSync(concatOutputPath, outputPath);
+  }
+
+  // Step 2.5: Mix TTS dialogue audio tracks
+  if (params.dialogueAudios && params.dialogueAudios.length > 0) {
+    const ttsOutputPath = outputPath.replace(/\.mp4$/, `-tts.mp4`);
+
+    // Calculate absolute start times for each dialogue audio track
+    const shotStartTimes: number[] = [];
+    let cumulative = 0;
+    for (const dur of allDurations) {
+      shotStartTimes.push(cumulative);
+      cumulative += dur;
+    }
+
+    const audioTracks = params.dialogueAudios
+      .filter((t) => {
+        const shotIdx = t.shotSequence - 1;
+        return shotIdx >= 0 && shotIdx < allDurations.length && fs.existsSync(path.resolve(t.audioPath));
+      })
+      .map((t) => {
+        const shotIdx = t.shotSequence - 1;
+        const startMs = Math.round((shotStartTimes[shotIdx] + allDurations[shotIdx] * t.startRatio) * 1000);
+        return { path: path.resolve(t.audioPath), startMs };
+      });
+
+    if (audioTracks.length > 0) {
+      try {
+        const cmd = ffmpeg();
+        cmd.input(outputPath); // 0: video with possible subtitles
+
+        for (const track of audioTracks) {
+          cmd.input(track.path); // 1, 2, ...: dialogue audio files
+        }
+
+        // Build filter: delay each audio track, then mix them all together
+        const filterParts: string[] = [];
+        const mixLabels: string[] = [];
+
+        for (let i = 0; i < audioTracks.length; i++) {
+          const delayMs = Math.max(0, audioTracks[i].startMs);
+          const label = `d${i}`;
+          filterParts.push(`[${i + 1}:a]adelay=${delayMs}|${delayMs},volume=1.0[${label}]`);
+          mixLabels.push(`[${label}]`);
+        }
+
+        const inputsCount = audioTracks.length;
+        const amixLabel = "mixed";
+        filterParts.push(`${mixLabels.join("")}amix=inputs=${inputsCount}:duration=longest:dropout_transition=2[${amixLabel}]`);
+
+        const complexFilter = filterParts.join(";");
+
+        await new Promise<void>((resolve, reject) => {
+          cmd
+            .complexFilter(complexFilter)
+            .outputOptions([
+              "-map", "0:v",
+              "-map", `[${amixLabel}]`,
+              "-c:v", "copy",
+              "-c:a", "aac",
+              "-b:a", "192k",
+              "-shortest",
+            ])
+            .output(ttsOutputPath)
+            .on("end", () => {
+              fs.unlinkSync(outputPath);
+              fs.renameSync(ttsOutputPath, outputPath);
+              resolve();
+            })
+            .on("error", (err) => reject(err))
+            .run();
+        });
+
+        console.log(`[FFmpeg] Mixed ${audioTracks.length} TTS tracks into video`);
+      } catch (err) {
+        console.warn(`[FFmpeg] TTS mix failed, skipping: ${err}`);
+      }
+    }
   }
 
   // Step 3: Mix background music if provided

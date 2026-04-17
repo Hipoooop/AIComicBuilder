@@ -27,6 +27,8 @@ import { buildVideoPrompt, buildReferenceVideoPrompt } from "@/lib/ai/prompts/vi
 import { buildRefVideoPromptRequest } from "@/lib/ai/prompts/ref-video-prompt-generate";
 import { buildCharacterTurnaroundPrompt } from "@/lib/ai/prompts/character-image";
 import { assembleVideo } from "@/lib/video/ffmpeg";
+import type { DialogueAudioTrack } from "@/lib/video/ffmpeg";
+import { EdgeTTSProvider, DEFAULT_VOICE } from "@/lib/ai/providers/tts-base";
 import { parseRefImages, serializeRefImages, appendToHistory, type RefImage } from "@/lib/ref-image-utils";
 import {
   loadShotLegacyView,
@@ -230,6 +232,10 @@ export async function POST(
 
   if (action === "ai_optimize_text") {
     return handleAiOptimizeText(payload, modelConfig);
+  }
+
+  if (action === "audio_generate") {
+    return handleAudioGenerateSync(projectId, episodeId);
   }
 
   if (action === "video_assemble") {
@@ -2372,6 +2378,91 @@ async function handleBatchReferenceVideo(
   return NextResponse.json({ results });
 }
 
+// --- audio_generate: synchronous TTS generation for all dialogues ---
+
+async function handleAudioGenerateSync(projectId: string, episodeId?: string) {
+  // Check if TTS is enabled
+  const [project] = await db
+    .select({ enableTts: projects.enableTts })
+    .from(projects)
+    .where(eq(projects.id, projectId));
+
+  if (!project?.enableTts) {
+    return NextResponse.json({ skipped: true, message: "TTS not enabled" });
+  }
+
+  // Build voice map from characters
+  const projectCharacters = await db
+    .select({ id: characters.id, name: characters.name, ttsVoice: characters.ttsVoice })
+    .from(characters)
+    .where(eq(characters.projectId, projectId));
+
+  const voiceMap = new Map<string, string>();
+  for (const char of projectCharacters) {
+    voiceMap.set(char.id, char.ttsVoice || DEFAULT_VOICE);
+  }
+
+  // Load shots
+  const shotConditions = [eq(shots.projectId, projectId)];
+  if (episodeId) shotConditions.push(eq(shots.episodeId, episodeId));
+
+  const projectShots = await db
+    .select({ id: shots.id, sequence: shots.sequence, duration: shots.duration })
+    .from(shots)
+    .where(and(...shotConditions))
+    .orderBy(asc(shots.sequence));
+
+  const ttsProvider = new EdgeTTSProvider();
+  let totalGenerated = 0;
+
+  for (const shot of projectShots) {
+    const shotDialogues = await db
+      .select({
+        id: dialogues.id,
+        text: dialogues.text,
+        characterId: dialogues.characterId,
+        sequence: dialogues.sequence,
+      })
+      .from(dialogues)
+      .where(eq(dialogues.shotId, shot.id))
+      .orderBy(asc(dialogues.sequence));
+
+    if (shotDialogues.length === 0) continue;
+
+    const dialogueCount = shotDialogues.length;
+    const shotDuration = shot.duration || 10;
+    const segmentDuration = shotDuration / dialogueCount;
+
+    for (let i = 0; i < shotDialogues.length; i++) {
+      const dialogue = shotDialogues[i];
+      const voice = voiceMap.get(dialogue.characterId) || DEFAULT_VOICE;
+
+      try {
+        const result = await ttsProvider.synthesize(dialogue.text, { voice });
+
+        const startRatio = (i * segmentDuration) / shotDuration;
+        const endRatio = Math.min(((i + 1) * segmentDuration) / shotDuration, 1.0);
+
+        await db
+          .update(dialogues)
+          .set({
+            audioUrl: result.filePath,
+            startRatio: String(startRatio),
+            endRatio: String(endRatio),
+          })
+          .where(eq(dialogues.id, dialogue.id));
+
+        totalGenerated++;
+      } catch (err) {
+        console.error(`[AudioGenerate] Failed for dialogue ${dialogue.id}: ${err}`);
+      }
+    }
+  }
+
+  console.log(`[AudioGenerate] Complete: ${totalGenerated} dialogues for project ${projectId}`);
+  return NextResponse.json({ totalGenerated, status: "ok" });
+}
+
 // --- video_assemble: synchronous ffmpeg concat + subtitle burn ---
 
 async function handleVideoAssembleSync(projectId: string, payload?: Record<string, unknown>, episodeId?: string) {
@@ -2435,7 +2526,7 @@ async function handleVideoAssembleSync(projectId: string, payload?: Record<strin
       : (nextShot?.transitionIn || "cut")) as TransitionType;
   });
 
-  // Get dialogues for subtitles
+  // Get dialogues for subtitles and TTS audio
   const allSubtitles: {
     text: string;
     shotSequence: number;
@@ -2444,6 +2535,7 @@ async function handleVideoAssembleSync(projectId: string, payload?: Record<strin
     startRatio?: number;
     endRatio?: number;
   }[] = [];
+  const dialogueAudios: DialogueAudioTrack[] = [];
   for (const shot of completedShots) {
     const shotDialogues = await db
       .select({
@@ -2453,6 +2545,7 @@ async function handleVideoAssembleSync(projectId: string, payload?: Record<strin
         shotSequence: shots.sequence,
         startRatio: dialogues.startRatio,
         endRatio: dialogues.endRatio,
+        audioUrl: dialogues.audioUrl,
       })
       .from(dialogues)
       .innerJoin(characters, eq(dialogues.characterId, characters.id))
@@ -2472,6 +2565,16 @@ async function handleVideoAssembleSync(projectId: string, payload?: Record<strin
         startRatio: sr,
         endRatio: er,
       });
+
+      // Add TTS audio track if available
+      if (d.audioUrl) {
+        dialogueAudios.push({
+          audioPath: d.audioUrl,
+          shotSequence: d.shotSequence,
+          startRatio: sr ?? idx / Math.max(count, 1),
+          endRatio: er ?? (idx + 1) / Math.max(count, 1),
+        });
+      }
     });
   }
 
@@ -2482,6 +2585,7 @@ async function handleVideoAssembleSync(projectId: string, payload?: Record<strin
       projectId,
       shotDurations: completedShots.map((s) => s.duration ?? 10),
       transitions,
+      dialogueAudios,
     });
 
     if (episodeId) {

@@ -19,6 +19,7 @@ export const projects = sqliteTable("projects", {
   worldSetting: text("world_setting").default(""),
   targetDuration: integer("target_duration").default(0),
   bgmUrl: text("bgm_url").default(""),
+  enableTts: integer("enable_tts").notNull().default(0),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .$defaultFn(() => new Date()),
@@ -74,6 +75,7 @@ export const characters = sqliteTable("characters", {
   performanceStyle: text("performance_style").default(""),
   heightCm: integer("height_cm").default(0),
   bodyType: text("body_type").default("average"),
+  ttsVoice: text("tts_voice").default(""),
   isStale: integer("is_stale").notNull().default(0),
   episodeId: text("episode_id").references(() => episodes.id, {
     onDelete: "cascade",
@@ -369,6 +371,7 @@ export const tasks = sqliteTable("tasks", {
       "frame_generate",
       "video_generate",
       "video_assemble",
+      "audio_generate",
     ],
   }).notNull(),
   status: text("status", {
