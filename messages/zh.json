@@ -198,7 +198,9 @@
     "generateRefPrompts": "生成参考图提示词",
     "batchGenerateRefImages": "批量生成参考图",
     "needTwoVersions": "至少需要2个版本才能对比",
-    "noFrame": "暂无画面"
+    "noFrame": "暂无画面",
+    "autoRunDesc": "将按顺序执行以下步骤：",
+    "autoRunNothing": "所有步骤已完成。"
   },
   "episode": {
     "title": "分集管理",

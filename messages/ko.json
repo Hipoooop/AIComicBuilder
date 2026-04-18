@@ -192,7 +192,9 @@
     "generateRefPrompts": "참고 이미지 프롬프트 생성",
     "batchGenerateRefImages": "참고 이미지 일괄 생성",
     "needTwoVersions": "비교하려면 2개 이상의 버전이 필요합니다",
-    "noFrame": "프레임 없음"
+    "noFrame": "프레임 없음",
+    "autoRunDesc": "다음 단계가 순차적으로 실행됩니다:",
+    "autoRunNothing": "모든 단계가 이미 완료되었습니다."
   },
   "episode": {
     "title": "에피소드 관리",

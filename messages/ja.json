@@ -192,7 +192,9 @@
     "generateRefPrompts": "参考画像プロンプト生成",
     "batchGenerateRefImages": "参考画像を一括生成",
     "needTwoVersions": "比較には2つ以上のバージョンが必要です",
-    "noFrame": "フレームなし"
+    "noFrame": "フレームなし",
+    "autoRunDesc": "以下のステップが順番に実行されます：",
+    "autoRunNothing": "すべてのステップが完了しています。"
   },
   "episode": {
     "title": "エピソード管理",

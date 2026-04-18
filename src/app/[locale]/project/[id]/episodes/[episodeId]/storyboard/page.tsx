@@ -22,21 +22,13 @@ import type { StoryboardVersion } from "@/stores/project-store";
 import { useModelGuard } from "@/hooks/use-model-guard";
 import {
   Film,
-  Sparkles,
-  ImageIcon,
-  VideoIcon,
-  Loader2,
   Download,
-  RefreshCw,
-  Play,
   Plus,
   LayoutGrid,
   List,
   ChevronDown,
   GitCompare,
 } from "lucide-react";
-import { InlineModelPicker } from "@/components/editor/model-selector";
-import { VideoRatioPicker } from "@/components/editor/video-ratio-picker";
 import { apiFetch } from "@/lib/api-fetch";
 import { toast } from "sonner";
 import { GenerationModeTab } from "@/components/editor/generation-mode-tab";
@@ -44,6 +36,8 @@ import { ShotDrawer } from "@/components/editor/shot-drawer";
 import { CharactersInlinePanel } from "@/components/editor/characters-inline-panel";
 import { ShotKanban } from "@/components/editor/shot-kanban";
 import { VersionCompare } from "@/components/editor/version-compare";
+import { BatchOperationPanel } from "@/components/editor/batch-operation-panel";
+import { AutoRunDialog, type AutoRunPlan } from "@/components/editor/auto-run-dialog";
 import { PromptEditButton } from "@/components/prompt-templates/prompt-edit-button";
 import Link from "next/link";
 
@@ -77,6 +71,9 @@ export default function EpisodeStoryboardPage() {
   const [lastBatchAction, setLastBatchAction] = useState<string | null>(null);
   const [compareMode, setCompareMode] = useState(false);
   const [generatingRefPrompts, setGeneratingRefPrompts] = useState(false);
+  const [autoRunOpen, setAutoRunOpen] = useState(false);
+  const [autoRunPlan, setAutoRunPlan] = useState<AutoRunPlan | null>(null);
+  const [autoRunExecuting, setAutoRunExecuting] = useState(false);
 
   const currentEpisodeId = useProjectStore((s) => s.currentEpisodeId);
   const episodeStoreEpisodes = useEpisodeStore((s) => s.episodes);
@@ -612,34 +609,46 @@ export default function EpisodeStoryboardPage() {
 
   async function handleAutoRun() {
     if (!project) return;
-    if (!confirm(t("project.autoRunConfirm"))) return;
 
     const shots = project.shots;
-    const needsText = shots.some((s) => !s.prompt && !s.motionScript);
-    const needsFrame = shots.some((s) =>
-      generationMode === "reference" ? !getSceneRefFrameUrl(s) : !getFirstFrameUrl(s) || !getLastFrameUrl(s)
-    );
-    const needsPrompt = shots.some((s) => !s.videoPrompt);
-    const needsVideo = shots.some((s) =>
-      generationMode === "reference" ? !getReferenceVideoUrl(s) : !getKeyframeVideoUrl(s)
-    );
+    const plan: AutoRunPlan = {
+      text: shots.filter((s) => !s.prompt && !s.motionScript).length,
+      frame: shots.filter((s) =>
+        generationMode === "reference" ? !getSceneRefFrameUrl(s) : !getFirstFrameUrl(s) || !getLastFrameUrl(s)
+      ).length,
+      prompt: shots.filter((s) => !s.videoPrompt).length,
+      video: shots.filter((s) =>
+        generationMode === "reference" ? !getReferenceVideoUrl(s) : !getKeyframeVideoUrl(s)
+      ).length,
+    };
 
-    if (needsText) await handleGenerateShots();
+    setAutoRunPlan(plan);
+    setAutoRunOpen(true);
+  }
+
+  async function executeAutoRun() {
+    if (!project || !autoRunPlan) return;
+    setAutoRunExecuting(true);
+    setAutoRunOpen(false);
+
+    const shots = project.shots;
+
+    if (autoRunPlan.text > 0) await handleGenerateShots();
     if (generationMode === "reference") {
-      // Step 2a: Generate ref image prompts if needed
       const needsRefPrompts = shots.some((s) => getReferenceAssets(s).length === 0);
       if (needsRefPrompts) await handleGenerateRefPrompts();
-
-      // Step 2b: Generate ref images
-      if (needsFrame) await handleBatchGenerateSceneFrames(false);
+      if (autoRunPlan.frame > 0) await handleBatchGenerateSceneFrames(false);
     } else {
-      if (needsFrame) await handleBatchGenerateFrames(false);
+      if (autoRunPlan.frame > 0) await handleBatchGenerateFrames(false);
     }
-    if (needsPrompt) await handleBatchGenerateVideoPrompts();
-    if (needsVideo) {
+    if (autoRunPlan.prompt > 0) await handleBatchGenerateVideoPrompts();
+    if (autoRunPlan.video > 0) {
       if (generationMode === "reference") await handleBatchGenerateReferenceVideos(false);
       else await handleBatchGenerateVideos(false);
     }
+
+    setAutoRunExecuting(false);
+    setAutoRunPlan(null);
   }
 
   return (
@@ -833,243 +842,49 @@ export default function EpisodeStoryboardPage() {
 
         {/* Batch operations */}
         {viewMode === "list" && (
-        <div className="space-y-2">
-          {/* Row 1: Generate text / shots */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="w-4 h-4 flex-shrink-0 flex items-center justify-center rounded-full bg-[--surface] text-[10px] font-bold text-[--text-muted]">1</span>
-            <InlineModelPicker capability="text" />
-            <Button
-              onClick={handleGenerateShots}
-              disabled={anyGenerating}
-              variant="default"
-              size="sm"
-            >
-              {generating ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Sparkles className="h-3.5 w-3.5" />
-              )}
-              {generating ? t("common.generating") : t("project.generateShots")}
-            </Button>
-          </div>
-
-          {/* Row 2: Frames */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="w-4 h-4 flex-shrink-0 flex items-center justify-center rounded-full bg-[--surface] text-[10px] font-bold text-[--text-muted]">2</span>
-            <InlineModelPicker capability="image" />
-            {generationMode === "reference" ? (
-              <>
-                <Button
-                  size="sm"
-                  onClick={handleGenerateRefPrompts}
-                  disabled={generatingRefPrompts || anyGenerating || totalShots === 0}
-                >
-                  {generatingRefPrompts ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                  {generatingRefPrompts ? t("common.generating") : (t("storyboard.generateRefPrompts") || "Generate Ref Prompts")}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="default"
-                  onClick={() => handleBatchGenerateSceneFrames(false)}
-                  disabled={anyGenerating || totalShots === 0 || !hasReferenceImages || shotsWithRefPrompts === 0}
-                >
-                  {generatingSceneFrames && !sceneFramesOverwrite ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImageIcon className="h-3.5 w-3.5" />}
-                  {generatingSceneFrames && !sceneFramesOverwrite ? t("common.generating") : (t("storyboard.batchGenerateRefImages") || "Batch Generate Ref Images")}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => handleBatchGenerateSceneFrames(true)}
-                  disabled={anyGenerating || totalShots === 0 || !hasReferenceImages}
-                >
-                  <RefreshCw className="h-3.5 w-3.5" />
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button
-                  size="sm"
-                  onClick={handleGenerateKeyframeAssets}
-                  disabled={generatingKeyframeAssets || anyGenerating || totalShots === 0}
-                  title="基于已有的镜头元数据生成首尾帧的图像提示词"
-                >
-                  {generatingKeyframeAssets ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Sparkles className="h-3.5 w-3.5" />
-                  )}
-                  {generatingKeyframeAssets ? "生成中…" : "生成首尾帧提示词"}
-                </Button>
-                <Button
-                  onClick={() => handleBatchGenerateFrames(false)}
-                  disabled={anyGenerating || totalShots === 0 || shotsWithKeyframePrompts === 0}
-                  variant="default"
-                  size="sm"
-                >
-                  {generatingFrames && !generatingFramesOverwrite ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <ImageIcon className="h-3.5 w-3.5" />
-                  )}
-                  {generatingFrames && !generatingFramesOverwrite
-                    ? t("common.generating")
-                    : t("project.batchGenerateFrames")}
-                </Button>
-                <Button
-                  onClick={() => handleBatchGenerateFrames(true)}
-                  disabled={anyGenerating || totalShots === 0 || shotsWithKeyframePrompts === 0}
-                  variant="ghost"
-                  size="icon"
-                  title={t("project.batchGenerateFramesOverwrite")}
-                >
-                  {generatingFrames && generatingFramesOverwrite ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <RefreshCw className="h-3.5 w-3.5" />
-                  )}
-                </Button>
-              </>
-            )}
-          </div>
-
-          {/* Row 3: Video prompts */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="w-4 h-4 flex-shrink-0 flex items-center justify-center rounded-full bg-[--surface] text-[10px] font-bold text-[--text-muted]">3</span>
-            <InlineModelPicker capability="text" />
-            <Button
-              onClick={handleBatchGenerateVideoPrompts}
-              disabled={anyGenerating || shotsWithFrameAny === 0}
-              variant="default"
-              size="sm"
-            >
-              {generatingVideoPrompts ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Sparkles className="h-3.5 w-3.5" />
-              )}
-              {generatingVideoPrompts ? t("common.generating") : t("project.batchGenerateVideoPrompts")}
-            </Button>
-          </div>
-
-          {/* Row 4: Videos */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="w-4 h-4 flex-shrink-0 flex items-center justify-center rounded-full bg-[--surface] text-[10px] font-bold text-[--text-muted]">4</span>
-            <InlineModelPicker capability="video" />
-            <VideoRatioPicker value={videoRatio} onChange={setVideoRatio} />
-            <Button
-              onClick={() =>
-                generationMode === "reference"
-                  ? handleBatchGenerateReferenceVideos(false)
-                  : handleBatchGenerateVideos(false)
-              }
-              disabled={
-  anyGenerating ||
-  totalShots === 0 ||
-  shotsWithVideoPrompts !== totalShots ||
-  (generationMode === "reference"
-    ? !hasReferenceImages || !allRefImagesGenerated || shotsWithRefPrompts !== totalShots
-    : shotsWithFrames !== totalShots)
-}
-              variant="default"
-              size="sm"
-            >
-              {generatingVideos && !generatingVideosOverwrite ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <VideoIcon className="h-3.5 w-3.5" />
-              )}
-              {generatingVideos && !generatingVideosOverwrite
-                ? t("common.generating")
-                : generationMode === "reference"
-                  ? t("project.batchGenerateReferenceVideos")
-                  : t("project.batchGenerateVideos")}
-            </Button>
-            <Button
-              onClick={() =>
-                generationMode === "reference"
-                  ? handleBatchGenerateReferenceVideos(true)
-                  : handleBatchGenerateVideos(true)
-              }
-              disabled={
-  anyGenerating ||
-  totalShots === 0 ||
-  shotsWithVideoPrompts !== totalShots ||
-  (generationMode === "reference"
-    ? !hasReferenceImages || !allRefImagesGenerated || shotsWithRefPrompts !== totalShots
-    : shotsWithFrames !== totalShots)
-}
-              variant="ghost"
-              size="icon"
-              title={t("project.batchGenerateVideosOverwrite")}
-            >
-              {generatingVideos && generatingVideosOverwrite ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <RefreshCw className="h-3.5 w-3.5" />
-              )}
-            </Button>
-          </div>
-
-          {/* Divider + Auto-run */}
-          {totalShots > 0 && (
-            <>
-              <div className="h-px bg-[--border-subtle]" />
-              <div className="flex items-center gap-2">
-                <Button
-                  onClick={handleAutoRun}
-                  disabled={anyGenerating}
-                  variant="default"
-                  size="sm"
-                  className="gap-1.5"
-                >
-                  {anyGenerating ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Play className="h-3.5 w-3.5" />
-                  )}
-                  {t("project.autoRun")}
-                </Button>
-                {lastFailedShots.length > 0 && !batchProgress && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleRetryFailed}
-                    disabled={anyGenerating}
-                    className="border-destructive/50 text-destructive hover:bg-destructive/10"
-                  >
-                    <RefreshCw className="mr-1 h-4 w-4" />
-                    Retry {lastFailedShots.length} failed
-                  </Button>
-                )}
-              </div>
-            </>
-          )}
-
-          {/* Batch progress bar */}
-          {batchProgress && (
-            <div className="flex items-center gap-3 rounded-lg border p-3 bg-muted/50">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <div className="flex-1">
-                <div className="h-2 rounded-full bg-muted overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-primary transition-all duration-300"
-                    style={{
-                      width: `${batchProgress.total > 0 ? (batchProgress.completed / batchProgress.total) * 100 : 0}%`,
-                    }}
-                  />
-                </div>
-              </div>
-              <span className="text-sm text-muted-foreground tabular-nums">
-                {batchProgress.completed}/{batchProgress.total}
-                {batchProgress.failed.length > 0 && (
-                  <span className="text-destructive ml-1">
-                    ({batchProgress.failed.length} failed)
-                  </span>
-                )}
-              </span>
-            </div>
-          )}
-        </div>
+        <BatchOperationPanel
+          stats={{
+            totalShots,
+            shotsWithFrames,
+            shotsWithVideoPrompts,
+            shotsWithFrameAny,
+            shotsWithRefPrompts,
+            shotsWithKeyframePrompts,
+            shotsWithAllRefImages,
+            hasReferenceImages,
+            allRefImagesGenerated,
+            generationMode,
+          }}
+          state={{
+            anyGenerating,
+            generating,
+            generatingFrames,
+            generatingSceneFrames,
+            generatingRefPrompts,
+            generatingKeyframeAssets,
+            generatingVideoPrompts,
+            generatingVideos,
+            generatingFramesOverwrite,
+            generatingVideosOverwrite,
+            sceneFramesOverwrite,
+          }}
+          progress={batchProgress}
+          lastFailedShots={lastFailedShots}
+          actions={{
+            onGenerateShots: handleGenerateShots,
+            onBatchGenerateFrames: handleBatchGenerateFrames,
+            onBatchGenerateSceneFrames: handleBatchGenerateSceneFrames,
+            onBatchGenerateVideos: handleBatchGenerateVideos,
+            onBatchGenerateReferenceVideos: handleBatchGenerateReferenceVideos,
+            onBatchGenerateVideoPrompts: handleBatchGenerateVideoPrompts,
+            onGenerateRefPrompts: handleGenerateRefPrompts,
+            onGenerateKeyframeAssets: handleGenerateKeyframeAssets,
+            onAutoRun: handleAutoRun,
+            onRetryFailed: handleRetryFailed,
+          }}
+          videoRatio={videoRatio}
+          onVideoRatioChange={setVideoRatio}
+        />
         )}
       </div>
 
@@ -1132,9 +947,7 @@ export default function EpisodeStoryboardPage() {
               videoRatio={videoRatio}
               isCompact={openDrawerShotId !== null}
               onOpenDrawer={(id) => setOpenDrawerShotId(id)}
-              batchGeneratingFrames={generationMode === "reference" ? generatingSceneFrames : generatingFrames}
-              batchGeneratingVideoPrompts={generatingVideoPrompts}
-              batchGeneratingVideos={generatingVideos}
+              anyGenerating={anyGenerating}
             />
           );
 
@@ -1189,6 +1002,14 @@ export default function EpisodeStoryboardPage() {
           anyGenerating={anyGenerating}
         />
       )}
+
+      <AutoRunDialog
+        open={autoRunOpen}
+        onOpenChange={setAutoRunOpen}
+        plan={autoRunPlan}
+        executing={autoRunExecuting}
+        onConfirm={executeAutoRun}
+      />
     </div>
   );
 }

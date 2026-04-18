@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { useTranslations } from "next-intl";
 import { uploadUrl } from "@/lib/utils/upload-url";
 import { useModelStore } from "@/stores/model-store";
@@ -28,17 +27,11 @@ import {
   VideoIcon,
   MessageCircle,
   Clock,
-  Sparkles,
   Copy,
   Check,
   RefreshCw,
-  ChevronDown,
-  ChevronUp,
   ChevronLeft,
   ChevronRight,
-  CheckCircle2,
-  Circle,
-  XCircle,
   Upload,
   Trash2,
   Plus,
@@ -46,51 +39,9 @@ import {
 import { AiOptimizeButton } from "./ai-optimize-button";
 import { InlineModelPicker } from "./model-selector";
 import { id as genId } from "@/lib/id";
-
-// Local shape compatible with legacy rendering code, built from ShotAsset.
-interface RefImage {
-  id: string;
-  type: "first_frame" | "last_frame" | "reference" | "video" | "ref_video";
-  prompt: string;
-  imagePath?: string;
-  status: "pending" | "generated";
-  characters?: string[];
-  sceneName?: string;
-  model?: { providerId: string; modelId: string };
-  history?: string[];
-  /** Parallel array to history: shot_assets row IDs for each historical version */
-  historyIds?: string[];
-}
-
-function assetToRefImage(a: ShotAsset, allAssets: ShotAsset[] = []): RefImage {
-  const typeMap: Record<ShotAsset["type"], RefImage["type"]> = {
-    first_frame: "first_frame",
-    last_frame: "last_frame",
-    reference: "reference",
-    keyframe_video: "video",
-    reference_video: "ref_video",
-  };
-  // Build the version history from all sibling rows in the same slot,
-  // sorted oldest → newest by assetVersion. Each entry has fileUrl + asset id
-  // so the UI can call activate API by id.
-  const siblings = allAssets
-    .filter((x) => x.type === a.type && x.sequenceInType === a.sequenceInType)
-    .sort((x, y) => x.assetVersion - y.assetVersion);
-  const historyUrls = siblings.map((s) => s.fileUrl).filter((u): u is string => !!u);
-  const historyIds = siblings.filter((s) => !!s.fileUrl).map((s) => s.id);
-  return {
-    id: a.id,
-    type: typeMap[a.type],
-    prompt: a.prompt ?? "",
-    imagePath: a.fileUrl ?? undefined,
-    status: a.status === "completed" && a.fileUrl ? "generated" : "pending",
-    characters: a.characters ?? undefined,
-    sceneName: a.meta?.sceneName,
-    model: a.modelProvider && a.modelId ? { providerId: a.modelProvider, modelId: a.modelId } : undefined,
-    history: historyUrls,
-    historyIds,
-  };
-}
+import { StepRow, type RefImage, type StepState, assetToRefImage } from "./shot-card/types";
+import { StepText } from "./shot-card/step-text";
+import { StepVideoPromptContent, StepVideoPlayerContent, type StepVideoProps } from "./shot-card/step-video";
 
 interface ShotCardProps {
   shot: Shot;
@@ -100,75 +51,10 @@ interface ShotCardProps {
   videoRatio?: string;
   isCompact?: boolean;
   onOpenDrawer?: (id: string) => void;
-  batchGeneratingFrames?: boolean;
-  batchGeneratingVideoPrompts?: boolean;
-  batchGeneratingVideos?: boolean;
+  anyGenerating?: boolean;
 }
 
 const TRANSITION_VALUES = ["cut", "dissolve", "fade_in", "fade_out", "wipeleft", "slideright", "circleopen"] as const;
-
-type StepState = "done" | "generating" | "error" | "idle";
-
-function StepIndicator({ state }: { state: StepState }) {
-  if (state === "done") return <CheckCircle2 className="h-4 w-4 text-emerald-500 flex-shrink-0" />;
-  if (state === "generating") return <Loader2 className="h-4 w-4 text-primary animate-spin flex-shrink-0" />;
-  if (state === "error") return <XCircle className="h-4 w-4 text-destructive flex-shrink-0" />;
-  return <Circle className="h-4 w-4 text-[--text-muted] flex-shrink-0" />;
-}
-
-function StepRow({
-  label,
-  state,
-  children,
-  defaultOpen = false,
-  isNext = false,
-}: {
-  label: string;
-  state: StepState;
-  children: React.ReactNode;
-  defaultOpen?: boolean;
-  isNext?: boolean;
-}) {
-  const [open, setOpen] = useState(defaultOpen || isNext);
-
-  useEffect(() => {
-    if (isNext) setOpen(true);
-  }, [isNext]);
-
-  return (
-    <div className={`rounded-xl border transition-colors ${
-      isNext
-        ? "border-primary/30 bg-primary/3"
-        : state === "done"
-          ? "border-emerald-100 bg-emerald-50/40"
-          : state === "error"
-            ? "border-destructive/20 bg-destructive/3"
-            : "border-[--border-subtle] bg-[--surface]/50"
-    }`}>
-      <button
-        className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left"
-        onClick={() => setOpen((o) => !o)}
-      >
-        <StepIndicator state={state} />
-        <span className={`flex-1 text-[13px] font-medium ${
-          isNext ? "text-primary" : state === "done" ? "text-emerald-700" : "text-[--text-secondary]"
-        }`}>
-          {label}
-        </span>
-        {open ? (
-          <ChevronUp className="h-3.5 w-3.5 text-[--text-muted]" />
-        ) : (
-          <ChevronDown className="h-3.5 w-3.5 text-[--text-muted]" />
-        )}
-      </button>
-      {open && (
-        <div className="border-t border-[--border-subtle] px-3 pb-3 pt-2.5">
-          {children}
-        </div>
-      )}
-    </div>
-  );
-}
 
 export function ShotCard({
   shot,
@@ -178,9 +64,7 @@ export function ShotCard({
   videoRatio = "16:9",
   isCompact = false,
   onOpenDrawer,
-  batchGeneratingFrames = false,
-  batchGeneratingVideoPrompts = false,
-  batchGeneratingVideos = false,
+  anyGenerating = false,
 }: ShotCardProps) {
   const id = shot.id;
   const sequence = shot.sequence;
@@ -276,17 +160,42 @@ export function ShotCard({
   // Step states
   const textState: StepState = rewritingText ? "generating" : hasText ? "done" : "idle";
   const frameState: StepState =
-    generatingFrames || generatingSceneFrame || batchGeneratingFrames ? "generating"
+    generatingFrames || generatingSceneFrame ? "generating"
     : status === "failed" && !hasFrame ? "error"
     : hasFrame ? "done" : "idle";
-  const promptState: StepState = generatingPrompt || batchGeneratingVideoPrompts ? "generating" : hasVideoPrompt ? "done" : "idle";
+  const promptState: StepState = generatingPrompt ? "generating" : hasVideoPrompt ? "done" : "idle";
   const videoState: StepState =
-    generatingVideo || batchGeneratingVideos || (isGenerating && !hasVideo) ? "generating"
+    generatingVideo || (isGenerating && !hasVideo) ? "generating"
     : status === "failed" && !hasVideo ? "error"
     : hasVideo ? "done" : "idle";
 
   // Which step is "next"
   const nextStep = !hasFrame ? "frame" : !hasVideoPrompt ? "prompt" : !hasVideo ? "video" : null;
+
+  const stepVideoProps: StepVideoProps = {
+    editVideoPrompt,
+    setEditVideoPrompt,
+    patchShot,
+    projectId,
+    promptState,
+    hasVideoPrompt,
+    hasFrame,
+    hasFramePair,
+    generatingPrompt,
+    anyGenerating,
+    nextStep,
+    onGenerateVideoPrompt: handleGenerateVideoPrompt,
+    videoUrl,
+    generationMode,
+    allRefItems,
+    activateAssetById,
+    setPreviewSrc,
+    videoState,
+    hasVideo,
+    isGenerating,
+    generatingVideo,
+    onGenerateVideo: handleGenerateVideo,
+  };
 
   async function patchShot(fields: Record<string, unknown>) {
     await apiFetch(`/api/projects/${projectId}/shots/${id}`, {
@@ -940,65 +849,18 @@ export function ShotCard({
           state={textState}
           defaultOpen={false}
         >
-          <div className="space-y-2.5">
-            <div>
-              <div className="mb-1 flex items-center gap-1">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[--text-muted]">{t("shot.sceneDescription")}</p>
-                <AiOptimizeButton
-                  value={editPrompt}
-                  onOptimized={(v) => { setEditPrompt(v); patchShot({ prompt: v }); }}
-                  fieldLabel="sceneDescription"
-                  projectId={projectId}
-                />
-              </div>
-              <Textarea
-                value={editPrompt}
-                onChange={(e) => setEditPrompt(e.target.value)}
-                onBlur={() => patchShot({ prompt: editPrompt })}
-                rows={2}
-                placeholder={t("shot.prompt")}
-              />
-            </div>
-            {/* Frame prompts moved to Step 2 (below images) */}
-            <div>
-              <div className="mb-1 flex items-center gap-1">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-600">{t("shot.motionScript")}</p>
-                <AiOptimizeButton
-                  value={editMotionScript}
-                  onOptimized={(v) => { setEditMotionScript(v); patchShot({ motionScript: v }); }}
-                  fieldLabel="motionScript"
-                  projectId={projectId}
-                />
-              </div>
-              <Textarea
-                value={editMotionScript}
-                onChange={(e) => setEditMotionScript(e.target.value)}
-                onBlur={() => patchShot({ motionScript: editMotionScript })}
-                rows={2}
-                placeholder={t("shot.motionScript")}
-                className="border-emerald-200 bg-emerald-50/30 text-sm"
-              />
-            </div>
-            <div>
-              <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[--text-muted]">{t("shot.cameraDirection")}</p>
-              <input
-                value={editCameraDirection}
-                onChange={(e) => setEditCameraDirection(e.target.value)}
-                onBlur={() => patchShot({ cameraDirection: editCameraDirection })}
-                className="w-full rounded-xl border border-[--border-subtle] bg-white px-3 py-2 text-sm outline-none focus:border-primary/50"
-                placeholder="static / pan-left / zoom-in ..."
-              />
-            </div>
-            <Button
-              size="xs"
-              variant="outline"
-              onClick={handleRewriteText}
-              disabled={rewritingText}
-            >
-              {rewritingText ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-              {rewritingText ? t("common.generating") : t("shot.rewriteText")}
-            </Button>
-          </div>
+          <StepText
+            editPrompt={editPrompt}
+            setEditPrompt={setEditPrompt}
+            editMotionScript={editMotionScript}
+            setEditMotionScript={setEditMotionScript}
+            editCameraDirection={editCameraDirection}
+            setEditCameraDirection={setEditCameraDirection}
+            patchShot={patchShot}
+            projectId={projectId}
+            rewritingText={rewritingText}
+            onRewriteText={handleRewriteText}
+          />
         </StepRow>
 
         {/* Step 2: 帧 */}
@@ -1336,13 +1198,13 @@ export function ShotCard({
             size="xs"
             variant={nextStep === "frame" ? "default" : "outline"}
             onClick={generationMode === "reference" ? handleBatchGenerateRefImagesForShot : handleGenerateFrames}
-            disabled={generatingFrames || generatingSceneFrame || generatingVideo || batchGeneratingFrames}
+            disabled={generatingFrames || generatingSceneFrame || generatingVideo || anyGenerating}
           >
-            {(generatingFrames || generatingSceneFrame || batchGeneratingFrames)
+            {(generatingFrames || generatingSceneFrame || anyGenerating)
               ? <Loader2 className="h-3 w-3 animate-spin" />
               : <ImageIcon className="h-3 w-3" />
             }
-            {(generatingFrames || generatingSceneFrame || batchGeneratingFrames)
+            {(generatingFrames || generatingSceneFrame)
               ? t("common.generating")
               : generationMode === "reference"
                 ? (hasRefImages ? t("shot.regenerateRefImages") : t("shot.generateRefImages"))
@@ -1357,36 +1219,7 @@ export function ShotCard({
           state={promptState}
           isNext={nextStep === "prompt"}
         >
-          {hasVideoPrompt && (
-            <div className="mb-2">
-              <div className="mb-1 flex items-center gap-1">
-                <AiOptimizeButton
-                  value={editVideoPrompt}
-                  onOptimized={(v) => { setEditVideoPrompt(v); patchShot({ videoPrompt: v }); }}
-                  fieldLabel="videoPrompt"
-                  projectId={projectId}
-                />
-              </div>
-              <Textarea
-                value={editVideoPrompt}
-                onChange={(e) => setEditVideoPrompt(e.target.value)}
-                onBlur={() => patchShot({ videoPrompt: editVideoPrompt })}
-                className="min-h-[5rem] resize-none font-mono text-xs leading-relaxed"
-              />
-            </div>
-          )}
-          <Button
-            size="xs"
-            variant={nextStep === "prompt" ? "default" : "outline"}
-            onClick={handleGenerateVideoPrompt}
-            disabled={generatingPrompt || batchGeneratingVideoPrompts || !hasFrame}
-          >
-            {(generatingPrompt || batchGeneratingVideoPrompts) ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-            {(generatingPrompt || batchGeneratingVideoPrompts)
-              ? t("common.generating")
-              : hasVideoPrompt ? t("shot.regeneratePrompt") : t("shot.generateVideoPrompt")
-            }
-          </Button>
+          <StepVideoPromptContent {...stepVideoProps} />
         </StepRow>
 
         {/* Step 4: 视频 */}
@@ -1395,69 +1228,7 @@ export function ShotCard({
           state={videoState}
           isNext={nextStep === "video"}
         >
-          {hasVideo && (() => {
-            const videoTypeKey = generationMode === "reference" ? "ref_video" : "video";
-            const videoItem = allRefItems.find((r) => r.type === videoTypeKey);
-            const videoHistoryIds = videoItem?.historyIds || [];
-            const videoCurrentIdx = videoItem ? videoHistoryIds.indexOf(videoItem.id) : -1;
-            return (
-              <div
-                className="group relative mb-2.5 w-full overflow-hidden rounded-xl border border-[--border-subtle] bg-black cursor-pointer"
-                style={{ aspectRatio: "16/9" }}
-                onClick={() => setPreviewSrc(uploadUrl(videoUrl!))}
-              >
-                <video className="h-full w-full object-contain" src={uploadUrl(videoUrl!)} />
-                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/30">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90 shadow-lg">
-                    <VideoIcon className="h-4 w-4 text-[--text-primary] translate-x-0.5" />
-                  </div>
-                </div>
-                {/* History navigation arrows */}
-                {videoHistoryIds.length > 1 && (
-                  <>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const next = (videoCurrentIdx - 1 + videoHistoryIds.length) % videoHistoryIds.length;
-                        activateAssetById(videoHistoryIds[next]);
-                      }}
-                      className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-1.5 text-white hover:bg-black/70"
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const next = (videoCurrentIdx + 1) % videoHistoryIds.length;
-                        activateAssetById(videoHistoryIds[next]);
-                      }}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-1.5 text-white hover:bg-black/70"
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </button>
-                    <span className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded bg-black/60 px-2 py-0.5 text-[10px] text-white">
-                      {videoCurrentIdx + 1}/{videoHistoryIds.length}
-                    </span>
-                  </>
-                )}
-              </div>
-            );
-          })()}
-          <Button
-            size="xs"
-            variant={nextStep === "video" ? "default" : "outline"}
-            onClick={handleGenerateVideo}
-            disabled={generatingVideo || batchGeneratingVideos || isGenerating || (generationMode === "keyframe" && !hasFramePair)}
-          >
-            {(generatingVideo || batchGeneratingVideos || (isGenerating && !hasVideo))
-              ? <Loader2 className="h-3 w-3 animate-spin" />
-              : <VideoIcon className="h-3 w-3" />
-            }
-            {(generatingVideo || batchGeneratingVideos || (isGenerating && !hasVideo))
-              ? t("common.generating")
-              : hasVideo ? t("shot.regenerateVideo") : t("project.generateVideo")
-            }
-          </Button>
+          <StepVideoPlayerContent {...stepVideoProps} />
         </StepRow>
 
       </div>
